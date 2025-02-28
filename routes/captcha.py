@@ -1,7 +1,9 @@
-from flask import Blueprint, send_file, session
-from io import BytesIO
 import random
 import string
+from io import BytesIO
+
+from flask import Blueprint, send_file, session
+
 from utils.captcha import generate_captcha
 
 captcha_bp = Blueprint("captcha", __name__)

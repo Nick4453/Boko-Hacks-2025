@@ -1,8 +1,11 @@
-from flask import Blueprint, render_template, jsonify, request
-import requests
 import json
+import os
 
-news_bp = Blueprint('news', __name__, url_prefix='/apps/news')
+import requests
+from flask import Blueprint, jsonify, request
+from flask_login import login_required
+
+news_bp = Blueprint('news', __name__, url_prefix='/api/news')
 
 # Base URL for the News API
 NEWS_API_BASE_URL = "https://saurav.tech/NewsAPI"
@@ -30,24 +33,13 @@ INTERNAL_NEWS = [
         "url": "#internal-only",
         "publishedAt": "2025-02-01T10:15:00Z",
         "urlToImage": ""
-    },
-    {
-        "title": "CONFIDENTIAL: Internal API Credentials",
-        "description": "API_KEY: 5x6hdPQmSK2aT9E3bL8nZ7yRfV4wX1  ADMIN_KEY: jKq2P8zX5sW7vT1yR4aB9nL6cE3hG",
-        "url": "#internal-only",
-        "publishedAt": "2025-01-30T14:45:00Z",
-        "urlToImage": ""
     }
 ]
 
-@news_bp.route('/')
-def news_page():
-    """Render the news page"""
-    return render_template('news.html')
-
 @news_bp.route('/fetch', methods=['GET'])
+@login_required
 def fetch_news():
-    """Fetch news from the News API with a vulnerability"""
+    """Fetch news from the News API with proper error handling"""
     try:
         # Get category from request, default to business
         category = request.args.get('category', 'business')
@@ -78,7 +70,7 @@ def fetch_news():
             except json.JSONDecodeError:
                 print(f"Invalid filter parameter: {filter_param}")
             
-            # Transform the data to match our expected format
+            # Transform the data to match our frontend's expected format
             transformed_data = {
                 'success': True,
                 'category': category,

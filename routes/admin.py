@@ -1,15 +1,29 @@
-from flask import Blueprint, render_template, request, flash, redirect, session, url_for, jsonify
+import os
 import sqlite3
 from functools import wraps
-from models.user import User
-from models.admin import Admin
-from extensions import db
 
-admin_bp = Blueprint("admin", __name__)
+import dotenv
+from flask import (Blueprint, flash, jsonify, redirect, render_template,
+                   request, session, url_for)
+from sqlalchemy import text
+
+from extensions import db
+from models.admin import Admin
+from models.user import User
+
+dotenv.load_dotenv()
+
+
+admin_username = os.getenv('ADMIN_USERNAME')
+admin_password= os.getenv('ADMIN_PASSWORD')
+
+
+admin_bp = Blueprint("admin", __name__, url_prefix="/api")
+
 
 DEFAULT_ADMIN = {
-    "username": "admin",
-    "password": "password"
+    "username": admin_username,
+    "password": admin_password
 }
 
 def init_admin_db():
@@ -68,6 +82,32 @@ def check_admin():
         })
     return jsonify({'logged_in': False})
 
+@admin_bp.route("/admin/login", methods=["POST"])
+def admin_login():
+    """Handle admin login"""
+    username = request.form.get("username")
+    password = request.form.get("password")
+    
+    user = User.query.filter_by(username=username).first()
+    if user and user.check_password(password):
+        admin_role = Admin.query.filter_by(user_id=user.id).first()
+        
+        if admin_role:
+            session['admin_logged_in'] = True
+            session['admin_username'] = username
+            session['is_default_admin'] = (admin_role.is_default == True)
+            
+            return jsonify({
+                'success': True,
+                'is_default_admin': admin_role.is_default,
+                'admins': get_admin_list()
+            })
+    
+    return jsonify({
+        'success': False,
+        'message': "Invalid admin credentials."
+    })
+
 @admin_bp.route("/admin", methods=["GET", "POST"])
 def admin():
     """Main admin route - handles both GET and POST requests"""
@@ -90,35 +130,24 @@ def admin():
                     'admins': get_admin_list()
                 })
         
-        try:
-            query = f"SELECT * FROM users WHERE username = '{username}' AND password_hash = '{password}'"
-            result = db.session.execute(query)
-            user_data = result.fetchone()
-            
-            if user_data:
-                admin_role = Admin.query.filter_by(user_id=user_data[0]).first()
-                
-                if admin_role:
-                    session['admin_logged_in'] = True
-                    session['admin_username'] = username
-                    session['is_default_admin'] = (admin_role.is_default == True)
-                    
-                    return jsonify({
-                        'success': True,
-                        'is_default_admin': admin_role.is_default,
-                        'admins': get_admin_list()
-                    })
-        except Exception as e:
-            print(f"SQL injection attempt failed: {e}")
-        
         return jsonify({
             'success': False,
             'message': "Invalid admin credentials."
         })
     
-    return render_template("admin.html", 
-                         admins=get_admin_list() if session.get('admin_logged_in') else None,
-                         is_default_admin=session.get('is_default_admin', False))
+    # GET request - return current admin status
+    if session.get('admin_logged_in'):
+        return jsonify({
+            'success': True,
+            'is_default_admin': session.get('is_default_admin', False),
+            'admin_username': session.get('admin_username'),
+            'admins': get_admin_list()
+        })
+    
+    return jsonify({
+        'success': False,
+        'message': "Not logged in"
+    })
 
 @admin_bp.route("/admin/add", methods=["POST"])
 def add_admin():
